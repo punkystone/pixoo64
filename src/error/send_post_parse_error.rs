@@ -7,4 +7,3 @@ impl Display for SendPostParseError {
         write!(f, "Unable to parse response from device")
     }
 }
-

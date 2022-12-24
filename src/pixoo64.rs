@@ -1,3 +1,4 @@
+#![allow(clippy::missing_errors_doc)]
 use crate::{
     color::Color,
     constants::{SIZE_X, SIZE_Y},
@@ -19,6 +20,7 @@ pub struct Pixoo64<'a> {
 }
 
 impl<'a> Pixoo64<'a> {
+    #[must_use]
     pub fn new(address: &'a str) -> Self {
         Self {
             address,
@@ -37,10 +39,10 @@ impl<'a> Pixoo64<'a> {
                 input: SetOutOfRangeErrorInput::Y(y),
             }));
         }
-        if let None = self.screen.get(x) {
+        if self.screen.get(x).is_none() {
             return Err(SetError::SetAccessError(SetAccessError));
         }
-        if let None = self.screen[x].get(y) {
+        if self.screen[x].get(y).is_none() {
             return Err(SetError::SetAccessError(SetAccessError));
         }
         self.screen[x][y] = *color;
@@ -54,14 +56,14 @@ impl<'a> Pixoo64<'a> {
            SIZE_X, base64
         );
         if self.reset().await? {
-            return Ok(self.send_post(command).await?);
+            return self.send_post(command).await;
         }
         Ok(false)
     }
 
     async fn reset(&self) -> Result<bool, ResetError> {
         let command = "{ \"Command\": \"Draw/ResetHttpGifId\" }".to_string();
-        Ok(self.send_post(command).await?)
+        self.send_post(command).await
     }
 
     fn encode_screen(&self) -> String {
@@ -74,8 +76,7 @@ impl<'a> Pixoo64<'a> {
                 result[pos * 3 + 2] = column.1.b;
             }
         }
-
-        return encode(result);
+        encode(result)
     }
 
     async fn send_post(&self, command: String) -> Result<bool, SendPostError> {

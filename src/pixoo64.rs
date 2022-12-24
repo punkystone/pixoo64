@@ -1,10 +1,18 @@
-use base64::encode;
-use hyper::{body::to_bytes, Body, Client, Method, Request};
-
 use crate::{
     color::Color,
     constants::{SIZE_X, SIZE_Y},
+    error::{
+        reset_error::ResetError,
+        send_error::SendError,
+        send_post_error::SendPostError,
+        set_access_error::SetAccessError,
+        set_error::SetError,
+        set_out_of_range_error::{SetOutOfRangeError, SetOutOfRangeErrorInput},
+    },
+    model::pixoo64_response::Pixoo64Response,
 };
+use base64::encode;
+use hyper::{body::to_bytes, Body, Client, Method, Request};
 pub struct Pixoo64<'a> {
     address: &'a str,
     screen: [[Color; SIZE_X]; SIZE_Y],
@@ -18,26 +26,42 @@ impl<'a> Pixoo64<'a> {
         }
     }
 
-    pub fn set(&mut self, x: usize, y: usize, color: &Color) {
-        if x < SIZE_X && y < SIZE_Y {
-            self.screen[x][y] = *color;
+    pub fn set(&mut self, x: usize, y: usize, color: &Color) -> Result<(), SetError> {
+        if x > SIZE_X - 1 {
+            return Err(SetError::SetOutOfRangeError(SetOutOfRangeError {
+                input: SetOutOfRangeErrorInput::X(x),
+            }));
         }
-        //TODO: throw error / use get
+        if y > SIZE_Y - 1 {
+            return Err(SetError::SetOutOfRangeError(SetOutOfRangeError {
+                input: SetOutOfRangeErrorInput::Y(y),
+            }));
+        }
+        if let None = self.screen.get(x) {
+            return Err(SetError::SetAccessError(SetAccessError));
+        }
+        if let None = self.screen[x].get(y) {
+            return Err(SetError::SetAccessError(SetAccessError));
+        }
+        self.screen[x][y] = *color;
+        Ok(())
     }
 
-    pub async fn send(&self) {
+    pub async fn send(&self) -> Result<bool, SendError> {
         let base64 = self.encode_screen();
         let command = format!(
             "{{ \"Command\": \"Draw/SendHttpGif\", \"PicNum\": 1, \"PicWidth\":{}, \"PicOffset\": 0, \"PicID\": 1 , \"PicSpeed\": 1000, \"PicData\": \"{}\"}}",
            SIZE_X, base64
         );
-        self.reset().await;
-        self.send_post(command).await;
+        if self.reset().await? {
+            return Ok(self.send_post(command).await?);
+        }
+        Ok(false)
     }
 
-    async fn reset(&self) {
+    async fn reset(&self) -> Result<bool, ResetError> {
         let command = "{ \"Command\": \"Draw/ResetHttpGifId\" }".to_string();
-        self.send_post(command).await;
+        Ok(self.send_post(command).await?)
     }
 
     fn encode_screen(&self) -> String {
@@ -54,22 +78,17 @@ impl<'a> Pixoo64<'a> {
         return encode(result);
     }
 
-    async fn send_post(&self, command: String) {
+    async fn send_post(&self, command: String) -> Result<bool, SendPostError> {
         let client = Client::new();
         let request = Request::builder()
             .method(Method::POST)
             .uri(format!("http://{}/post", self.address))
             .header("Content-Type", "application/json")
             .header("Content-Length", command.len())
-            .body(Body::from(command))
-            .unwrap();
-        let response = client.request(request).await.unwrap();
-
-        println!(
-            "{}, {}",
-            response.status(),
-            String::from_utf8(to_bytes(response.into_body()).await.unwrap().to_vec()).unwrap()
-        )
-        //TODO read error code
+            .body(Body::from(command))?;
+        let response = client.request(request).await?;
+        let response_string = String::from_utf8(to_bytes(response.into_body()).await?.to_vec())?;
+        let pixoo64_response = serde_json::from_str::<Pixoo64Response>(&response_string)?;
+        Ok(pixoo64_response.error_code == 0)
     }
 }

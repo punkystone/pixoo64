@@ -3,49 +3,29 @@ use hyper::{body::to_bytes, Body, Client, Method, Request};
 
 const SIZE_X: usize = 64;
 const SIZE_Y: usize = 64;
-const SIZE: usize = SIZE_X * SIZE_Y;
-
+#[derive(Copy, Clone)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
     pub b: u8,
 }
 
-struct Screen {
-    r: Vec<u8>,
-    g: Vec<u8>,
-    b: Vec<u8>,
-}
-
-impl Screen {
-    fn new() -> Self {
-        Self {
-            r: vec![0; SIZE],
-            g: vec![0; SIZE],
-            b: vec![0; SIZE],
-        }
-    }
-}
-
 pub struct Pixoo64<'a> {
     address: &'a str,
-    screen: Screen,
+    screen: [[Color; SIZE_X]; SIZE_Y],
 }
 
 impl<'a> Pixoo64<'a> {
     pub fn new(address: &'a str) -> Self {
         Self {
             address,
-            screen: Screen::new(),
+            screen: [[Color { r: 0, g: 0, b: 0 }; SIZE_X]; SIZE_Y],
         }
     }
 
-    pub fn set(&mut self, x: usize, y: usize, color: Color) {
+    pub fn set(&mut self, x: usize, y: usize, color: &Color) {
         if x < SIZE_X && y < SIZE_Y {
-            let pos = y * SIZE_X + x;
-            self.screen.r[pos] = color.r;
-            self.screen.g[pos] = color.g;
-            self.screen.b[pos] = color.b;
+            self.screen[x][y] = *color;
         }
         //TODO: throw error / use get
     }
@@ -53,8 +33,8 @@ impl<'a> Pixoo64<'a> {
     pub async fn send(&self) {
         let base64 = self.encode_screen();
         let command = format!(
-            "{{ \"Command\": \"Draw/SendHttpGif\", \"PicNum\": 1, \"PicWidth\":64, \"PicOffset\": 0, \"PicID\": 1 , \"PicSpeed\": 1000, \"PicData\": \"{}\"}}",
-            base64
+            "{{ \"Command\": \"Draw/SendHttpGif\", \"PicNum\": 1, \"PicWidth\":{}, \"PicOffset\": 0, \"PicID\": 1 , \"PicSpeed\": 1000, \"PicData\": \"{}\"}}",
+           SIZE_X, base64
         );
         self.reset().await;
         self.send_post(command).await;
@@ -66,12 +46,16 @@ impl<'a> Pixoo64<'a> {
     }
 
     fn encode_screen(&self) -> String {
-        let mut result = vec![0 as u8; SIZE * 3];
-        for i in 0..SIZE {
-            result[i * 3] = self.screen.r[i];
-            result[i * 3 + 1] = self.screen.g[i];
-            result[i * 3 + 2] = self.screen.b[i];
+        let mut result = vec![0u8; SIZE_X * SIZE_Y * 3];
+        for row in self.screen.iter().enumerate() {
+            for column in row.1.iter().enumerate() {
+                let pos = SIZE_X * row.0 + column.0;
+                result[pos * 3] = column.1.r;
+                result[pos * 3 + 1] = column.1.g;
+                result[pos * 3 + 2] = column.1.b;
+            }
         }
+
         return encode(result);
     }
 

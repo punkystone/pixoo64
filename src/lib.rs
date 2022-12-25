@@ -1,4 +1,3 @@
-pub mod color;
 mod constants;
 pub mod error;
 pub mod model;

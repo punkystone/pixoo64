@@ -1,6 +1,5 @@
 #![allow(clippy::missing_errors_doc)]
 use crate::{
-    color::Color,
     constants::{SIZE_X, SIZE_Y},
     error::{
         reset_error::ResetError,
@@ -10,6 +9,7 @@ use crate::{
         set_error::SetError,
         set_out_of_range_error::{SetOutOfRangeError, SetOutOfRangeErrorInput},
     },
+    model::color::Color,
     model::pixoo64_response::Pixoo64Response,
 };
 use base64::encode;
